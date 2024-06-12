@@ -1,6 +1,6 @@
 [package]
 name = "rs-crypto"
-version = "0.0.1-alpha.4"
+version = "0.0.1-beta.1"
 edition = "2021"
 authors = ["yangxu52"]
 description = "A simple crypto library, based on Rust and WebAssembly."

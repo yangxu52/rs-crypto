@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "rs-crypto"
-version = "0.0.1-alpha.4"
+version = "0.0.1-beta.1"
 dependencies = [
  "base64",
  "getrandom",
