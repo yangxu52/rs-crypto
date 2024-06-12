@@ -2,7 +2,6 @@ name: Automated Publish
 
 on:
   push:
-    branches: ['main']
     tags: ['v*.*.*']
 
 env:
@@ -30,9 +29,6 @@ jobs:
       - name: Build with wasm-pack
         run: wasm-pack build --target web --release
 
-      # - name: Setup git
-      #   uses: fregante/setup-git-user@v2
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -40,6 +36,8 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish with npm
-        run: npm publish --provenance --access public pkg --registry=https://registry.npmjs.org
+        run: |
+          cd pkg
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

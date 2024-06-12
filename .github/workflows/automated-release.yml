@@ -2,7 +2,6 @@ name: Automated Release
 
 on:
   push:
-    branches: ['main']
     tags: ['v*.*.*']
 
 env:
@@ -34,7 +33,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tags: ${{github.ref}}
           prerelease: ${{contains(github.ref, 'alpha') || contains(github.ref, 'beta')|| contains(github.ref, 'rc')}}
           files: |
             rs-crypto.tar.gz
