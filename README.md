@@ -61,22 +61,22 @@ const plainText1 = rsaDec.decrypt(cipherText1)
 const plainText2 = rsaDec.decrypt(cipherText2)
 ```
 
-#### 4.2 Not require a key: Example `MD5` digest
+#### 4.2 Not require a key: Example `SHA2` digest
 
-1. Import `MD5` Method
+1. Import `SHA2` Method
 2. Call Method.
    
 ```js
-import { MD5 } from 'rs-crypto'
-const digest = MD5(need_to_digest)
+import { SHA2 } from 'rs-crypto'
+const digest = SHA2.sha256(need_to_digest)
 ```
 
 ## Roadmap
 - [ ] Crypto Methods
   - [x] RSA
   - [ ] AES
-  - [ ] SHA1
-  - [ ] SHA256
+  - [x] SHA2
+  - [ ] HMAC
   - [ ] ……
 - [ ] Performance Optimization
 - [ ] Human Readable
