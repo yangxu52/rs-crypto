@@ -72,14 +72,14 @@ const digest = SHA2.sha256(need_to_digest)
 ```
 
 ## Roadmap
-- [ ] Crypto Methods
+- Add more
   - [x] RSA
   - [ ] AES
   - [x] SHA2
   - [ ] HMAC
   - [ ] ……
-- [ ] Performance Optimization
-- [ ] Human Readable
+- Improve docs
+- Optimize Performance
 
 ## Contributors
 
