@@ -6,9 +6,10 @@ authors = ["yangxu52"]
 description = "A simple crypto library, based on Rust and WebAssembly."
 repository = "https://github.com/yangxu52/rs-crypto"
 license = "MIT"
+keywords = ["Rust", "WebAssembly", "Crypto Alg", "Digest Alg", "Security"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 getrandom = { version = "0.2.15", features = ["js"] }
@@ -17,3 +18,10 @@ rand = "0.8.5"
 base64 = "0.22.1"
 rsa = "0.9.6"
 sha2 = "0.10.8"
+
+[profile.release]
+opt-level = "z"   # Optimize for size.
+lto = true        # Enable Link Time Optimization
+codegen-units = 1 # Reduce number of codegen units to increase optimizations.
+panic = "abort"   # Abort on panic
+strip = true      # Automatically strip symbols from the binary.
