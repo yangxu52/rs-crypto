@@ -1,48 +1,91 @@
+use core::panic;
+
 use base64::{prelude::BASE64_STANDARD, Engine};
-use rand;
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey},
-    Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey,
+    traits::PublicKeyParts,
+    Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey,
 };
+use sha2::Sha256;
+
+/// RSA Padding Type
+/// PKCS1v1_5 or PKCS1v2(OAEP)
+#[wasm_bindgen]
+#[derive(Default)]
+pub enum PaddingType {
+    #[default]
+    PKCS1v1_5,
+    PKCS1v2,
+}
+
 use wasm_bindgen::prelude::*;
+
 /// RSA Encrypt Module
 #[wasm_bindgen]
 pub struct RSAEncrypt {
     // public key
     pub_key: RsaPublicKey,
+    padding_type: PaddingType,
+    plain_len: usize,
 }
 #[wasm_bindgen]
 impl RSAEncrypt {
+    /// padding_type: PKCS1v1_5 or PKCS1v2
     #[wasm_bindgen(constructor)]
-    pub fn new(pub_key: String) -> Self {
+    pub fn new(pub_key: String, padding_type: Option<PaddingType>) -> Self {
+        let pub_key =
+            RsaPublicKey::from_public_key_pem(&pub_key).expect_throw("public key decode failed");
+        let padding_type = padding_type.unwrap_or(PaddingType::default());
+        let plain_len = match padding_type {
+            PaddingType::PKCS1v1_5 => pub_key.size() - 11,
+            PaddingType::PKCS1v2 => pub_key.size() - 2 - 2 * 32,
+        };
         Self {
-            pub_key: RsaPublicKey::from_public_key_pem(&pub_key).expect("public key decode failed"),
+            pub_key,
+            padding_type,
+            plain_len,
         }
     }
     /// RSA encrypt
     /// use public key to encrypt, encode plain_text and return cipher_text as base64
     #[wasm_bindgen]
     pub fn encrypt(&self, plain_text: &str) -> String {
+        if plain_text.len() > self.plain_len {
+            panic!("plain_text too long");
+        }
         let mut rng = rand::thread_rng();
-        let data = self
-            .pub_key
-            .encrypt(&mut rng, Pkcs1v15Encrypt, plain_text.as_bytes())
-            .expect("failed to encrypt");
+        // need optimize
+        // I want to use match self.padding_typo => Pkcs1v15Encrypt or Oaep::new::<Sha256>(), It's need a type for between.
+        let data = match self.padding_type {
+            PaddingType::PKCS1v1_5 => self
+                .pub_key
+                .encrypt(&mut rng, Pkcs1v15Encrypt, plain_text.as_bytes())
+                .expect_throw("failed to encrypt"),
+            PaddingType::PKCS1v2 => self
+                .pub_key
+                .encrypt(&mut rng, Oaep::new::<Sha256>(), plain_text.as_bytes())
+                .expect_throw("failed to encrypt"),
+        };
         BASE64_STANDARD.encode(data)
     }
 }
-/// RSA Decrypt Module
+/// RSA  Decrypt Module
 #[wasm_bindgen]
 pub struct RSADecrypt {
     // private key
     pri_key: RsaPrivateKey,
+    padding_type: PaddingType,
 }
 #[wasm_bindgen]
 impl RSADecrypt {
     #[wasm_bindgen(constructor)]
-    pub fn new(pri_key: String) -> Self {
+    pub fn new(pri_key: String, padding_type: Option<PaddingType>) -> Self {
+        let pri_key =
+            RsaPrivateKey::from_pkcs8_pem(&pri_key).expect_throw("public key decode failed");
+        let padding_type = padding_type.unwrap_or(PaddingType::default());
         Self {
-            pri_key: RsaPrivateKey::from_pkcs8_pem(&pri_key).expect("private key decode failed"),
+            pri_key,
+            padding_type,
         }
     }
     /// RSA decrypt
@@ -51,12 +94,20 @@ impl RSADecrypt {
     pub fn decrypt(&self, cipher_text: &str) -> String {
         let data = BASE64_STANDARD
             .decode(cipher_text)
-            .expect("cipher_text decode failed");
-        let plain = self
-            .pri_key
-            .decrypt(Pkcs1v15Encrypt, &data)
-            .expect("failed to decrypt");
-        String::from_utf8(plain).expect("utf-8 decode failed")
+            .expect_throw("cipher_text decode failed");
+        // need optimize
+        // I want to use match self.padding_typo => Pkcs1v15Encrypt or Oaep::new::<Sha256>(), It's need a type for between.
+        let plain = match self.padding_type {
+            PaddingType::PKCS1v1_5 => self
+                .pri_key
+                .decrypt(Pkcs1v15Encrypt, &data)
+                .expect_throw("failed to decrypt"),
+            PaddingType::PKCS1v2 => self
+                .pri_key
+                .decrypt(Oaep::new::<Sha256>(), &data)
+                .expect_throw("failed to decrypt"),
+        };
+        String::from_utf8(plain).expect_throw("utf-8 decode failed")
     }
 }
 
@@ -101,20 +152,33 @@ X8rxXBTDVWmTYmrulzm2CEldgMDbIop1LTsB2z6LyGuRE+5gt6PrN2LMswzYpTka
 Aw5wUzwt7PIaWOUC/ps1wh8JMw==
 -----END PRIVATE KEY-----";
     #[test]
-    fn test_rsa_encrypt_decrypt() {
+    fn test_pkcs1v15_encrypt_decrypt() {
         let pub_key = String::from(PUB_KEY);
         let pri_key = String::from(PRI_KEY);
 
-        let rsa_encrypt = RSAEncrypt::new(pub_key);
-        let rsa_decrypt = RSADecrypt::new(pri_key);
-        let plain_text = "Hello, World!";
+        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(PaddingType::PKCS1v1_5));
+        let rsa_decrypt = RSADecrypt::new(pri_key, Some(PaddingType::PKCS1v1_5));
 
+        let plain_text = "Hello, World!";
         let cipher_text = rsa_encrypt.encrypt(plain_text);
         let decrypted_text = rsa_decrypt.decrypt(&cipher_text);
-        println!(
-            "cipher_text: {}, decrypted_text: {}",
-            cipher_text, decrypted_text
-        );
+        println!("cipher_text: {}", cipher_text);
+        println!("decrypted_text: {}", decrypted_text);
+        assert_eq!(plain_text, decrypted_text);
+    }
+    #[test]
+    fn test_pkcs1v2_encrypt_decrypt() {
+        let pub_key = String::from(PUB_KEY);
+        let pri_key = String::from(PRI_KEY);
+
+        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(PaddingType::PKCS1v2));
+        let rsa_decrypt = RSADecrypt::new(pri_key, Some(PaddingType::PKCS1v2));
+
+        let plain_text = "Hello, World!";
+        let cipher_text = rsa_encrypt.encrypt(plain_text);
+        let decrypted_text = rsa_decrypt.decrypt(&cipher_text);
+        println!("cipher_text: {}", cipher_text);
+        println!("decrypted_text: {}", decrypted_text);
         assert_eq!(plain_text, decrypted_text);
     }
 }
