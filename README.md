@@ -73,13 +73,27 @@ const digest = SHA2.sha256(need_to_digest)
 
 ## Roadmap
 - Add more
-  - [x] RSA
+  - [ ] RSA
+    - [x] PKCS#8 PEM Import
+    - [x] PKCS1v1.5 Encrypt/Decrypt
+    - [x] PKCS1v2(OAEP) Encrypt/Decrypt (*padding digest `sha256`*)
+    - [ ] PKCS1v1.5 Sign/Verify
+    - [ ] PSS Sign/Verify
   - [ ] AES
   - [x] SHA2
+    - [x] sha224
+    - [x] sha256
+    - [x] sha384
+    - [x] sha512
   - [ ] HMAC
   - [ ] ……
-- Improve docs
+- Improve docs & human readability
+  - [x] Console print error
+  - [x] RSA
+  - [ ] ……
 - Optimize Performance
+  - [x] Optimize compile args
+  - [ ] ……
 
 ## Contributors
 
