@@ -1,5 +1,4 @@
-use core::panic;
-
+use crate::console_err;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey},
@@ -7,107 +6,141 @@ use rsa::{
     Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey,
 };
 use sha2::Sha256;
+use wasm_bindgen::prelude::*;
 
-/// RSA Padding Type
-/// PKCS1v1_5 or PKCS1v2(OAEP)
+/// **RSA Cryptography Specifications Version**  
+///  
+/// *options: `PKCS1v1_5` | `PKCS1v2` (OAEP)*  
+/// - `PKCS1v1_5`: PKCS#1 v1.5
+///   - padding length: 11byte.
+/// - `PKCS1v2`:  PKCS#1 v2(OAEP), ***Default***, ***REC.***
+///   - padding length: 66byte = 2byte + 2 * 32byte   
+///   - digest algorithm: sha256
 #[wasm_bindgen]
 #[derive(Default)]
-pub enum PaddingType {
-    #[default]
+pub enum RsaPkcsVersion {
     PKCS1v1_5,
+    #[default]
     PKCS1v2,
 }
 
-use wasm_bindgen::prelude::*;
-
-/// RSA Encrypt Module
+/// **RSA Encrypt Module**  
+///  
+/// *encrypt msg by public key*  
 #[wasm_bindgen]
 pub struct RSAEncrypt {
-    // public key
-    pub_key: RsaPublicKey,
-    padding_type: PaddingType,
-    plain_len: usize,
+    public_key: RsaPublicKey,
+    pkcs_version: RsaPkcsVersion,
+    plain_max_len: usize,
 }
 #[wasm_bindgen]
 impl RSAEncrypt {
-    /// padding_type: PKCS1v1_5 or PKCS1v2
+    /// **RSAEncrypt Constructor**  
+    ///  
+    /// *args: `public_key`, `pkcs_version?`*
+    /// - `public_key`: `string`  
+    ///   - public key pem, need pkcs#8 format
+    /// - `pkcs_version`: `RsaPkcsVersion`***Optional***
     #[wasm_bindgen(constructor)]
-    pub fn new(pub_key: String, padding_type: Option<PaddingType>) -> Self {
-        let pub_key =
-            RsaPublicKey::from_public_key_pem(&pub_key).expect_throw("public key decode failed");
-        let padding_type = padding_type.unwrap_or(PaddingType::default());
-        let plain_len = match padding_type {
-            PaddingType::PKCS1v1_5 => pub_key.size() - 11,
-            PaddingType::PKCS1v2 => pub_key.size() - 2 - 2 * 32,
+    pub fn new(public_key: String, pkcs_version: Option<RsaPkcsVersion>) -> Self {
+        let public_key = RsaPublicKey::from_public_key_pem(&public_key).expect(&console_err!(
+            "Decode public key failed, need pkcs#8, check pem format"
+        ));
+        let pkcs_version = pkcs_version.unwrap_or_default();
+        let plain_max_len = match pkcs_version {
+            RsaPkcsVersion::PKCS1v1_5 => public_key.size() - 11,
+            RsaPkcsVersion::PKCS1v2 => public_key.size() - 2 - 2 * 32,
         };
         Self {
-            pub_key,
-            padding_type,
-            plain_len,
+            public_key,
+            pkcs_version,
+            plain_max_len,
         }
     }
-    /// RSA encrypt
-    /// use public key to encrypt, encode plain_text and return cipher_text as base64
+    /// **RSA Encrypt**  
+    /// use public key to encrypt, encode plain_text and return cipher_text as base64.  
+    /// *args: `plain_text`*
+    /// - `plain_text`: `string`  
+    ///   - plain text, which need to be encrypted  
+    ///   - max length determined by public_key's length and pkcs_version
     #[wasm_bindgen]
     pub fn encrypt(&self, plain_text: &str) -> String {
-        if plain_text.len() > self.plain_len {
-            panic!("plain_text too long");
+        if plain_text.len() > self.plain_max_len {
+            panic!(
+                "{}",
+                console_err!(
+                    "Too long plain_text, max length: {}, determined by public_key's length and pkcs_version",
+                    self.plain_max_len
+                )
+            );
         }
         let mut rng = rand::thread_rng();
         // need optimize
         // I want to use match self.padding_typo => Pkcs1v15Encrypt or Oaep::new::<Sha256>(), It's need a type for between.
-        let data = match self.padding_type {
-            PaddingType::PKCS1v1_5 => self
-                .pub_key
+        let data = match self.pkcs_version {
+            RsaPkcsVersion::PKCS1v1_5 => self
+                .public_key
                 .encrypt(&mut rng, Pkcs1v15Encrypt, plain_text.as_bytes())
-                .expect_throw("failed to encrypt"),
-            PaddingType::PKCS1v2 => self
-                .pub_key
+                .expect(&console_err!("Encrypt failed")),
+            RsaPkcsVersion::PKCS1v2 => self
+                .public_key
                 .encrypt(&mut rng, Oaep::new::<Sha256>(), plain_text.as_bytes())
-                .expect_throw("failed to encrypt"),
+                .expect(&console_err!("Encrypt failed")),
         };
         BASE64_STANDARD.encode(data)
     }
 }
-/// RSA  Decrypt Module
+/// **RSA Decrypt Module**  
+///  
+/// *decrypt msg by private key*  
 #[wasm_bindgen]
 pub struct RSADecrypt {
     // private key
-    pri_key: RsaPrivateKey,
-    padding_type: PaddingType,
+    private_key: RsaPrivateKey,
+    pkcs_version: RsaPkcsVersion,
 }
 #[wasm_bindgen]
 impl RSADecrypt {
+    /// **RSADecrypt Constructor**  
+    ///  
+    /// *args: `private_key`, `pkcs_version?`*
+    /// - `private_key`: `string`  
+    ///   - private key pem, need pkcs#8 format
+    /// - `pkcs_version`: `RsaPkcsVersion`***Optional***
     #[wasm_bindgen(constructor)]
-    pub fn new(pri_key: String, padding_type: Option<PaddingType>) -> Self {
-        let pri_key =
-            RsaPrivateKey::from_pkcs8_pem(&pri_key).expect_throw("public key decode failed");
-        let padding_type = padding_type.unwrap_or(PaddingType::default());
+    pub fn new(private_key: String, pkcs_version: Option<RsaPkcsVersion>) -> Self {
+        let private_key = RsaPrivateKey::from_pkcs8_pem(&private_key).expect(&console_err!(
+            "Decode private key failed, need pkcs#8,check pem format"
+        ));
+        let pkcs_version = pkcs_version.unwrap_or_default();
         Self {
-            pri_key,
-            padding_type,
+            private_key,
+            pkcs_version,
         }
     }
-    /// RSA decrypt
+    /// **RSA Decrypt**  
     /// use private key to decrypt, decode cipher_text and return plain_text as utf-8
+    /// *args: `cipher_text`*
+    /// - `cipher_text`: `string`  
+    ///   - plain text, base64, which need to be decrypt  
     #[wasm_bindgen]
     pub fn decrypt(&self, cipher_text: &str) -> String {
         let data = BASE64_STANDARD
             .decode(cipher_text)
-            .expect_throw("cipher_text decode failed");
+            .expect(&console_err!("Decode cipher_text failed"));
         // need optimize
         // I want to use match self.padding_typo => Pkcs1v15Encrypt or Oaep::new::<Sha256>(), It's need a type for between.
-        let plain = match self.padding_type {
-            PaddingType::PKCS1v1_5 => self
-                .pri_key
+        let plain = match self.pkcs_version {
+            RsaPkcsVersion::PKCS1v1_5 => self
+                .private_key
                 .decrypt(Pkcs1v15Encrypt, &data)
-                .expect_throw("failed to decrypt"),
-            PaddingType::PKCS1v2 => self
-                .pri_key
+                .expect(&console_err!("Decrypt failed")),
+            RsaPkcsVersion::PKCS1v2 => self
+                .private_key
                 .decrypt(Oaep::new::<Sha256>(), &data)
-                .expect_throw("failed to decrypt"),
+                .expect(&console_err!("Decrypt failed")),
         };
-        String::from_utf8(plain).expect_throw("utf-8 decode failed")
+        String::from_utf8(plain).expect(&console_err!("Encode plain_text to utf-8 error"))
     }
 }
 
@@ -156,8 +189,8 @@ Aw5wUzwt7PIaWOUC/ps1wh8JMw==
         let pub_key = String::from(PUB_KEY);
         let pri_key = String::from(PRI_KEY);
 
-        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(PaddingType::PKCS1v1_5));
-        let rsa_decrypt = RSADecrypt::new(pri_key, Some(PaddingType::PKCS1v1_5));
+        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(RsaPkcsVersion::PKCS1v1_5));
+        let rsa_decrypt = RSADecrypt::new(pri_key, Some(RsaPkcsVersion::PKCS1v1_5));
 
         let plain_text = "Hello, World!";
         let cipher_text = rsa_encrypt.encrypt(plain_text);
@@ -171,8 +204,8 @@ Aw5wUzwt7PIaWOUC/ps1wh8JMw==
         let pub_key = String::from(PUB_KEY);
         let pri_key = String::from(PRI_KEY);
 
-        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(PaddingType::PKCS1v2));
-        let rsa_decrypt = RSADecrypt::new(pri_key, Some(PaddingType::PKCS1v2));
+        let rsa_encrypt = RSAEncrypt::new(pub_key, Some(RsaPkcsVersion::PKCS1v2));
+        let rsa_decrypt = RSADecrypt::new(pri_key, Some(RsaPkcsVersion::PKCS1v2));
 
         let plain_text = "Hello, World!";
         let cipher_text = rsa_encrypt.encrypt(plain_text);
